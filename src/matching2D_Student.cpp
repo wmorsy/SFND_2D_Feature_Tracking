@@ -145,6 +145,7 @@ void detKeypointsHarris(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, bool
 
                 // perform non-maximum suppression (NMS) in local neighbourhood around new key point
                 bool bOverlap = false;
+                m.lock();
                 std::any_of(keypoints.begin(), keypoints.end(), [=, &bOverlap, &newKeyPoint](cv::KeyPoint &prevKeyPoint) {
                     double kptOverlap = cv::KeyPoint::overlap(newKeyPoint, prevKeyPoint);
                     if (kptOverlap > maxOverlap)
@@ -152,15 +153,14 @@ void detKeypointsHarris(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, bool
                         bOverlap = true;
                         if (newKeyPoint.response >
                             prevKeyPoint.response)
-                        {                               // if overlap is >t AND response
-                                                        // is higher for new kpt
-                            prevKeyPoint = newKeyPoint; // replace old key point with new
-                                                        // one
+                        {                               // if overlap is >t AND response is higher for new kpt
+                            prevKeyPoint = newKeyPoint; // replace old key point with new one
                             return true;                // quit loop over keypoints
                         }
                     }
                     return false;
                 });
+                m.unlock();
 
                 // only add new key point if no overlap
                 // has been found in previous NMS

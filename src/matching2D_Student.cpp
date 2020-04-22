@@ -101,3 +101,94 @@ void detKeypointsShiTomasi(vector<cv::KeyPoint> &keypoints, cv::Mat &img, bool b
         cv::waitKey(0);
     }
 }
+
+void detKeypointsHarris(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, bool bVis)
+{
+    // Detector parameters
+    const int blockSize = 2;       // for every pixel, a blockSize × blockSize neighborhood is considered
+    const int apertureSize = 3;    // aperture parameter for Sobel operator (must be odd)
+    const int minResponse = 100;   // minimum value for a corner in the 8bit scaled response matrix
+    const double k = 0.04;         // Harris parameter (see equation for details)
+    const double maxOverlap = 0.0; // max. permissible overlap between two features in %, used during non-maxima suppression
+
+    // Detect Harris corners and normalize output
+    cv::Mat dst, dst_norm, dst_norm_scaled;
+    dst = cv::Mat::zeros(img.size(), CV_32FC1);
+
+    cv::cornerHarris(img, dst, blockSize, apertureSize, k, cv::BORDER_DEFAULT);
+    cv::normalize(dst, dst_norm, 0, 255, cv::NORM_MINMAX, CV_32FC1, cv::Mat());
+    cv::convertScaleAbs(dst_norm, dst_norm_scaled);
+
+    // Look for prominent corners and instantiate keypoints
+
+    bool locked = false; // temp workaround to fix concurrency, check stl options
+    
+    std::mutex m; // openCV uses parallel threads in the forEach call and vector push_back is not thread safe
+    
+    double t = (double)cv::getTickCount();
+
+    dst_norm.forEach<float>(
+        [&](float &p, const int position[]) {
+            
+            int response = (int)p;
+            // only store points above a threshold
+            if (response > minResponse)
+            {
+                // cv::KeyPoint &newKeyPoint(std::unique_ptr<vector<cv::KeyPoint>>);
+                // std::unique_ptr<cv::KeyPoint> newKeyPointPtr(new cv::KeyPoint);
+                // cv::KeyPoint &newKeyPoint(*newKeyPointPtr.get());
+
+                cv::KeyPoint newKeyPoint;
+                newKeyPoint.pt = cv::Point2f(position[1], position[0]);
+                newKeyPoint.size = 2 * apertureSize;
+                newKeyPoint.response = response;
+
+                // perform non-maximum suppression (NMS) in local neighbourhood around new key point
+                bool bOverlap = false;
+                std::any_of(keypoints.begin(), keypoints.end(), [=, &bOverlap, &newKeyPoint](cv::KeyPoint &prevKeyPoint) {
+                    double kptOverlap = cv::KeyPoint::overlap(newKeyPoint, prevKeyPoint);
+                    if (kptOverlap > maxOverlap)
+                    {
+                        bOverlap = true;
+                        if (newKeyPoint.response >
+                            prevKeyPoint.response)
+                        {                               // if overlap is >t AND response
+                                                        // is higher for new kpt
+                            prevKeyPoint = newKeyPoint; // replace old key point with new
+                                                        // one
+                            return true;                // quit loop over keypoints
+                        }
+                    }
+                    return false;
+                });
+
+                // only add new key point if no overlap
+                // has been found in previous NMS
+                if (!bOverlap)
+                {
+                    m.lock();
+                    keypoints.emplace_back(newKeyPoint); // store new keypoint in dynamic list
+                    m.unlock();
+                }
+            }
+        });
+    
+    t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
+    cout << "Harris detection with n=" << keypoints.size() << " keypoints in " << 1000 * t / 1.0 << " ms" << endl;
+
+    // visualize results
+    if (bVis)
+    {
+        cv::Mat visImage = img.clone();
+        cv::drawKeypoints(img, keypoints, visImage, cv::Scalar::all(-1), cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+        string windowName = "Harris Corner Detection Results";
+        cv::namedWindow(windowName, 6);
+        imshow(windowName, visImage);
+        cv::waitKey(0);
+    }
+}
+
+void detKeypointsModern(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, std::string detectorType, bool bVis)
+{
+
+}

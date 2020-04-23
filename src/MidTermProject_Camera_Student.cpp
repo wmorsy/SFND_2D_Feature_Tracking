@@ -36,9 +36,9 @@ int main(int argc, const char *argv[])
     int imgFillWidth = 4;  // no. of digits which make up the file index (e.g. img-0001.png)
 
     // misc
-    const int dataBufferSize = 3;       // no. of images which are held in memory (ring buffer) at the same time
+    const int dataBufferSize = 3;                     // no. of images which are held in memory (ring buffer) at the same time
     RingBuffer<DataFrame, dataBufferSize> dataBuffer; // list of data frames which are held in memory at the same time
-    bool bVis = false;            // visualize results
+    bool bVis = false;                                // visualize results
 
     /* MAIN LOOP OVER ALL IMAGES */
 
@@ -80,7 +80,7 @@ int main(int argc, const char *argv[])
 
         // extract 2D keypoints from current image
         vector<cv::KeyPoint> keypoints; // create empty feature list for current image
-        string detectorType = "HARRIS";
+        string detectorType = "SIFT";
 
         //// STUDENT ASSIGNMENT
         //// TASK MP.2 -> add the following keypoint detectors in file matching2D.cpp and enable string-based selection based on detectorType
@@ -106,10 +106,11 @@ int main(int argc, const char *argv[])
 
         // only keep keypoints on the preceding vehicle
         bool bFocusOnVehicle = true;
-        cv::Rect vehicleRect(535, 180, 180, 150);
+        cv::Rect2f vehicleRect(535, 180, 180, 150);
         if (bFocusOnVehicle)
         {
-            // ...
+            auto newEnd = std::remove_if(keypoints.begin(), keypoints.end(), [&](cv::KeyPoint keypoint) { return !vehicleRect.contains(keypoint.pt); });
+            keypoints.erase(newEnd, keypoints.end());
         }
 
         //// EOF STUDENT ASSIGNMENT

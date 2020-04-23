@@ -39,6 +39,7 @@ void descKeypoints(vector<cv::KeyPoint> &keypoints, cv::Mat &img, cv::Mat &descr
 {
     // select appropriate descriptor
     cv::Ptr<cv::DescriptorExtractor> extractor;
+    //BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
     if (descriptorType.compare("BRISK") == 0)
     {
 
@@ -48,11 +49,31 @@ void descKeypoints(vector<cv::KeyPoint> &keypoints, cv::Mat &img, cv::Mat &descr
 
         extractor = cv::BRISK::create(threshold, octaves, patternScale);
     }
+    else if (descriptorType == "BRIEF")
+    {
+        extractor = cv::xfeatures2d::BriefDescriptorExtractor::create();
+    }
+    else if (descriptorType == "ORB")
+    {
+        extractor = cv::ORB::create();
+    }
+    else if (descriptorType == "FREAK")
+    {
+        extractor = cv::xfeatures2d::FREAK::create();
+    }
+    else if (descriptorType == "AKAZE")
+    {
+        extractor = cv::AKAZE::create();
+    }
+    else if (descriptorType == "SIFT")
+    {        
+        extractor = cv::xfeatures2d::SiftDescriptorExtractor::create();
+    }
     else
     {
-
-        //...
+        // Error, unknown descriptor type
     }
+
 
     // perform feature description
     double t = (double)cv::getTickCount();
@@ -81,7 +102,6 @@ void detKeypointsShiTomasi(vector<cv::KeyPoint> &keypoints, cv::Mat &img, bool b
     // add corners to result vector
     for (auto it = corners.begin(); it != corners.end(); ++it)
     {
-
         cv::KeyPoint newKeyPoint;
         newKeyPoint.pt = cv::Point2f((*it).x, (*it).y);
         newKeyPoint.size = blockSize;
@@ -190,5 +210,47 @@ void detKeypointsHarris(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, bool
 
 void detKeypointsModern(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, std::string detectorType, bool bVis)
 {
+    cv::Ptr<cv::FeatureDetector> detector;
+    // FAST, BRISK, ORB, AKAZE, SIFT
+    if (detectorType == "FAST")
+    {
+        const int threshold = 30; // difference between intensity of the central pixel and pixels of a circle around this pixel
+        detector = cv::FastFeatureDetector::create(threshold);
+    }
+    else if (detectorType == "BRISK")
+    {
+        detector = cv::BRISK::create();
+    }
+    else if (detectorType == "ORB")
+    {
+        detector = cv::ORB::create();
+    }
+    else if (detectorType == "AKAZE")
+    {
+        detector = cv::AKAZE::create();
+    }
+    else if (detectorType == "SIFT")
+    {
+        detector = cv::xfeatures2d::SIFT::create();
+    }
+    else
+    {
+        // Error, unknown detector type
+    }
 
+    double t = (double)cv::getTickCount();
+    detector->detect(img, keypoints);
+    t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
+    cout << string(detectorType+" detection with n=") << keypoints.size() << " keypoints in " << 1000 * t / 1.0 << " ms" << endl;
+
+        // visualize results
+    if (bVis)
+    {
+        cv::Mat visImage = img.clone();
+        cv::drawKeypoints(img, keypoints, visImage, cv::Scalar::all(-1), cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+        string windowName = string(detectorType+" Corner Detection Results");
+        cv::namedWindow(windowName, 6);
+        imshow(windowName, visImage);
+        cv::waitKey(0);
+    }
 }

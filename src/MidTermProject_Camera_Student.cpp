@@ -21,8 +21,53 @@ using namespace std;
 /* MAIN PROGRAM */
 int main(int argc, const char *argv[])
 {
+    ///////////////// START OF EVALUATION CODE //////////////
+    // Uncomment the code block below to run all detectors descriptors evaluation
+    //
+    // Create an output filestream object
+    // std::ofstream result;
+    // //set it write and append mode
+    // result.open("../results.csv", std::fstream::out | std::fstream::app);
+    // // Send the column header names to the created csv file
+    // result << "ImgID"
+    //        << ","
+    //        << "Detector"
+    //        << ","
+    //        << "Descriptor"
+    //        << ","
+    //        << "DetectorTime(ms)"
+    //        << ","
+    //        << "DescriptorTime(ms)"
+    //        << ","
+    //        << "VehicleKeypointsCount"
+    //        << ","
+    //        << "VehicleKeypoints/TotalKeypoints(%)"
+    //        << ","
+    //        << "MatchedVehicleKeypointsCount"
+    //        << ","
+    //        << ","
+    //        << "TotalTime"
+    //        << "," << endl;
+
+    // Different combinations used for evaluation
+    // std::string detectors[7] = {"SHITOMASI", "HARRIS", "FAST", "BRISK", "ORB", "AKAZE", "SIFT"};
+    // std::string descriptors[5] = {"BRIEF", "ORB", "FREAK", "AKAZE", "SIFT"};
+
+    // for (const string &detectorType : detectors)
+    // {
+    //     for (const string &descriptor : descriptors)
+    //     {
+    //         // Skip incompatible detector / descriptor pair
+    //         if (((descriptor.compare("AKAZE") == 0) && (detectorType.compare("AKAZE") != 0)) ||
+    //             ((descriptor.compare("ORB") == 0) && (detectorType.compare("SIFT") == 0)))
+    //         {
+    //             continue;
+    //         }
+    ///////////////// END OF EVALUATION CODE //////////////
 
     /* INIT VARIABLES AND DATA STRUCTURES */
+    double detectorTime = 0.0, descriptorTime = 0.0, totalTime = 0.0;
+    int totalKeypoints = 0, vehicleKeypoints = 0, matchedKeypoints = 0;
 
     // data location
     string dataPath = "../";
@@ -36,9 +81,12 @@ int main(int argc, const char *argv[])
     int imgFillWidth = 4;  // no. of digits which make up the file index (e.g. img-0001.png)
 
     // misc
-    int dataBufferSize = 2;       // no. of images which are held in memory (ring buffer) at the same time
-    vector<DataFrame> dataBuffer; // list of data frames which are held in memory at the same time
-    bool bVis = false;            // visualize results
+    const int dataBufferSize = 3;                     // no. of images which are held in memory (ring buffer) at the same time
+    RingBuffer<DataFrame, dataBufferSize> dataBuffer; // list of data frames which are held in memory at the same time
+    bool bVis = false;                                // visualize results
+
+    std::string detectorType = "FAST"; //{"SHITOMASI", "HARRIS", "FAST", "BRISK", "ORB", "AKAZE", "SIFT"};
+    std::string descriptor = "BRIEF";  //{"BRIEF", "ORB", "FREAK", "AKAZE", "SIFT"}
 
     /* MAIN LOOP OVER ALL IMAGES */
 
@@ -59,10 +107,19 @@ int main(int argc, const char *argv[])
         //// STUDENT ASSIGNMENT
         //// TASK MP.1 -> replace the following code with ring buffer of size dataBufferSize
 
-        // push image into data frame buffer
+        //// TEST Ring buffer
+        // RingBuffer<int, 3> test;
+        // test.push(1);
+        // test.push(2);
+        // test.push(3);
+        // test.push(4);
+        // test.push(5);
+        // std::for_each(test.begin(), test.end(), [](int v){std::cout<<v<<endl;});
+
+        // push image into data frame buffer, which is not has a RingBuffer type
         DataFrame frame;
         frame.cameraImg = imgGray;
-        dataBuffer.push_back(frame);
+        dataBuffer.push(frame);
 
         //// EOF STUDENT ASSIGNMENT
         cout << "#1 : LOAD IMAGE INTO BUFFER done" << endl;
@@ -71,7 +128,6 @@ int main(int argc, const char *argv[])
 
         // extract 2D keypoints from current image
         vector<cv::KeyPoint> keypoints; // create empty feature list for current image
-        string detectorType = "SHITOMASI";
 
         //// STUDENT ASSIGNMENT
         //// TASK MP.2 -> add the following keypoint detectors in file matching2D.cpp and enable string-based selection based on detectorType
@@ -79,12 +135,20 @@ int main(int argc, const char *argv[])
 
         if (detectorType.compare("SHITOMASI") == 0)
         {
-            detKeypointsShiTomasi(keypoints, imgGray, false);
+            detKeypointsShiTomasi(keypoints, imgGray, bVis, detectorTime);
+        }
+        else if(detectorType.compare("HARRIS") == 0)
+        {
+            detKeypointsHarris(keypoints, imgGray, bVis, detectorTime);
         }
         else
         {
-            //...
+            detKeypointsModern(keypoints, imgGray, detectorType, bVis, detectorTime);
         }
+
+        // Evaluation value
+        totalKeypoints = keypoints.size();
+        
         //// EOF STUDENT ASSIGNMENT
 
         //// STUDENT ASSIGNMENT
@@ -92,11 +156,14 @@ int main(int argc, const char *argv[])
 
         // only keep keypoints on the preceding vehicle
         bool bFocusOnVehicle = true;
-        cv::Rect vehicleRect(535, 180, 180, 150);
+        cv::Rect2f vehicleRect(535, 180, 180, 150);
         if (bFocusOnVehicle)
         {
-            // ...
+            auto newEnd = std::remove_if(keypoints.begin(), keypoints.end(), [&](cv::KeyPoint keypoint) { return !vehicleRect.contains(keypoint.pt); });
+            keypoints.erase(newEnd, keypoints.end());
         }
+        // Evaluation value
+        vehicleKeypoints = keypoints.size();
 
         //// EOF STUDENT ASSIGNMENT
 
@@ -121,12 +188,11 @@ int main(int argc, const char *argv[])
         /* EXTRACT KEYPOINT DESCRIPTORS */
 
         //// STUDENT ASSIGNMENT
-        //// TASK MP.4 -> add the following descriptors in file matching2D.cpp and enable string-based selection based on descriptorType
+        //// TASK MP.4 -> add the following descriptors in file matching2D.cpp and enable string-based selection based on descriptor
         //// -> BRIEF, ORB, FREAK, AKAZE, SIFT
 
         cv::Mat descriptors;
-        string descriptorType = "BRISK"; // BRIEF, ORB, FREAK, AKAZE, SIFT
-        descKeypoints((dataBuffer.end() - 1)->keypoints, (dataBuffer.end() - 1)->cameraImg, descriptors, descriptorType);
+        descKeypoints((dataBuffer.end() - 1)->keypoints, (dataBuffer.end() - 1)->cameraImg, descriptors, descriptor, descriptorTime);
         //// EOF STUDENT ASSIGNMENT
 
         // push descriptors for current frame to end of data buffer
@@ -140,9 +206,10 @@ int main(int argc, const char *argv[])
             /* MATCH KEYPOINT DESCRIPTORS */
 
             vector<cv::DMatch> matches;
-            string matcherType = "MAT_BF";        // MAT_BF, MAT_FLANN
-            string descriptorType = "DES_BINARY"; // DES_BINARY, DES_HOG
-            string selectorType = "SEL_NN";       // SEL_NN, SEL_KNN
+            string matcherType = "MAT_BF";   // MAT_BF, MAT_FLANN
+            string selectorType = "SEL_KNN"; // SEL_NN, SEL_KNN
+
+            string descriptorType = (descriptor.compare("SIFT") == 0 ? "DES_HOG" : "DES_BINARY"); // DES_BINARY, DES_HOG
 
             //// STUDENT ASSIGNMENT
             //// TASK MP.5 -> add FLANN matching in file matching2D.cpp
@@ -151,6 +218,9 @@ int main(int argc, const char *argv[])
             matchDescriptors((dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints,
                              (dataBuffer.end() - 2)->descriptors, (dataBuffer.end() - 1)->descriptors,
                              matches, descriptorType, matcherType, selectorType);
+
+            // Evaluation value
+            matchedKeypoints = matches.size();
 
             //// EOF STUDENT ASSIGNMENT
 
@@ -179,7 +249,19 @@ int main(int argc, const char *argv[])
             bVis = false;
         }
 
+        // EVALUATION CODE 
+        // result << imgIndex << "," << detectorType << "," << descriptor << "," << detectorTime << "," << descriptorTime << "," << vehicleKeypoints << "," << (float(vehicleKeypoints) / float(totalKeypoints) * 100.0) << "," << matchedKeypoints << ","
+        //        << "," << detectorTime + descriptorTime << "," << endl;
     } // eof loop over all images
 
+        // EVALUATION CODE 
+        // result << ",,,,,,,,," << endl << ",,,,,,,,," << endl << ",,,,,,,,," << endl;
+
+    //This return has to be commented out during evaluation run
     return 0;
 }
+    // EVALUATION CODE 
+//     }
+
+//     return 0;
+// }
